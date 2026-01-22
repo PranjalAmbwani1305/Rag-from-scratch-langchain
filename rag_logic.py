@@ -16,7 +16,7 @@ pipe = pipeline(
     model=model,
     tokenizer=tokenizer,
     max_new_tokens=512,
-    temperature=0.2
+    temperature=0.2,
 )
 
 llm = HuggingFacePipeline(pipeline=pipe)
