@@ -1,69 +1,38 @@
-# STREAMLIT UI
-
-
 import streamlit as st
-from rag_logic import build_vectorstore, build_rag_chain, answer_question
+from rag_logic import load_split, build_store, build_chain, ask
 
-st.set_page_config(page_title="RAG Chatbot", layout="wide")
-st.title("RAG Chatbot (Local, No OpenAI)")
-
+st.title("RAG Chatbot")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "rag_chain" not in st.session_state:
-    st.session_state.rag_chain = None
+if "chain" not in st.session_state:
+    st.session_state.chain = None
 
+file = st.sidebar.file_uploader("Upload PDF", type=["pdf"])
 
-st.sidebar.header("Document Setup")
+if file and st.sidebar.button("Build"):
+    with open("temp.pdf", "wb") as f:
+        f.write(file.read())
+    splits = load_split("temp.pdf")
+    store = build_store(splits)
+    st.session_state.chain = build_chain(store)
 
-uploaded_file = st.sidebar.file_uploader(
-    "Upload PDF",
-    type=["pdf"]
-)
+for m in st.session_state.messages:
+    with st.chat_message(m["role"]):
+        st.markdown(m["content"])
 
-if uploaded_file and st.sidebar.button("Build Knowledge Base"):
-    with st.spinner("Processing document..."):
-        with open("temp.pdf", "wb") as f:
-            f.write(uploaded_file.read())
-
-        vectorstore = build_vectorstore("temp.pdf")
-        st.session_state.rag_chain = build_rag_chain(vectorstore)
-
-        st.sidebar.success("RAG system ready")
-
-
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-
-if prompt := st.chat_input("Ask a question"):
-    st.session_state.messages.append(
-        {"role": "user", "content": prompt}
-    )
-
+if prompt := st.chat_input("Ask"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    if not st.session_state.rag_chain:
-        response = "Please upload a document first."
+    if not st.session_state.chain:
+        answer = "Upload a document first"
     else:
-        chat_history = [
-            m["content"]
-            for m in st.session_state.messages
-            if m["role"] == "assistant"
-        ]
+        history = [m["content"] for m in st.session_state.messages if m["role"] == "assistant"]
+        answer = ask(st.session_state.chain, prompt, history)
 
-        with st.spinner("Thinking..."):
-            response = answer_question(
-                st.session_state.rag_chain,
-                prompt,
-                chat_history
-            )
-
-    st.session_state.messages.append(
-        {"role": "assistant", "content": response}
-    )
-
+    st.session_state.messages.append({"role": "assistant", "content": answer})
     with st.chat_message("assistant"):
-        st.markdown(response)
+        st.markdown(answer)
